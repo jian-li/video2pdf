@@ -30,26 +30,36 @@ def get_frames(video_path):
     if not vs.isOpened():
         raise Exception(f'unable to open file {video_path}')
 
-
+    #
+    FRAME_RATE = vs.get(cv2.CAP_PROP_FPS)
     total_frames = vs.get(cv2.CAP_PROP_FRAME_COUNT)
+
+     # 计算视频的总时长（秒）
+    total_duration = total_frames / FRAME_RATE
+
     frame_time = 0
     frame_count = 0
     print("total_frames: ", total_frames)
     print("FRAME_RATE", FRAME_RATE)
 
+    speed_up_rate = 10
+
     # loop over the frames of the video
     while True:
         # grab a frame from the video
-
         vs.set(cv2.CAP_PROP_POS_MSEC, frame_time * 1000)    # move frame to a timestamp
-        frame_time += 1/FRAME_RATE
+        frame_time = frame_count /FRAME_RATE
 
-        (_, frame) = vs.read()
+        #
+        (success, frame) = vs.read()
+
         # if the frame is None, then we have reached the end of the video file
-        if frame is None:
+        print(success)
+        if frame_count > total_frames :
             break
-
-        frame_count += 1
+        
+        #
+        frame_count += 1.0 *  speed_up_rate
         yield frame_count, frame_time, frame
 
     vs.release()
@@ -71,7 +81,9 @@ def detect_unique_screenshots(video_path, output_folder_screenshot_path):
     (W, H) = (None, None)
 
     screenshoots_count = 0
+    frame_id = 0
     for frame_count, frame_time, frame in get_frames(video_path):
+        frame_id = frame_id + 1
         orig = frame.copy() # clone the original frame (so we can save it later), 
         frame = imutils.resize(frame, width=600) # resize the frame
         mask = fgbg.apply(frame) # apply the background subtractor
@@ -88,7 +100,7 @@ def detect_unique_screenshots(video_path, output_folder_screenshot_path):
         p_diff = (cv2.countNonZero(mask) / float(W * H)) * 100
 
         # if p_diff less than N% then motion has stopped, thus capture the frame
-
+        print("process frame ", frame_id)
         if p_diff < MIN_PERCENT and not captured and frame_count > WARMUP:
             captured = True
             filename = f"{screenshoots_count:03}_{round(frame_time/60, 2)}.png"
@@ -141,15 +153,16 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser("video_path")
     parser.add_argument("video_path", help="path of video to be converted to pdf slides", type=str)
     args = parser.parse_args()
-    video_path = args.video_path
-
+    video_path = args.video_path.replace("\\", "\/")
+                                         
+    #
     print('video_path', video_path)
     output_folder_screenshot_path = initialize_output_folder(video_path)
     detect_unique_screenshots(video_path, output_folder_screenshot_path)
 
     print('Please Manually verify screenshots and delete duplicates')
     while True:
-        choice = input("Press y to continue and n to terminate")
+        choice = input("Press y to continue and n to terminate(y/n):")
         choice = choice.lower().strip()
         if choice in ['y', 'n']:
             break
